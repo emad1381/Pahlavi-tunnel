@@ -1,27 +1,27 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-APP_NAME="Pahlavi"
-TG_ID="@IlyaahD"
+APP_NAME="emad"
+TG_ID="@emad1381"
 VERSION="2.0.0"
 
-GITHUB_REPO="github.com/Zehnovik/Pahlavi-tunnel"
+GITHUB_REPO="github.com/emad1381/emad"
 
 # MUST match GitHub file name exactly:
 SCRIPT_FILENAME="Pahlavi-Tunnel.sh"
-SELF_URL="https://raw.githubusercontent.com/Zehnovik/Pahlavi-tunnel/main/${SCRIPT_FILENAME}"
+SELF_URL="https://raw.githubusercontent.com/emad1381/emad/main/${SCRIPT_FILENAME}"
 
-PY="/opt/pahlavi/Pahlavi.py"
-PY_URL="https://raw.githubusercontent.com/Zehnovik/Pahlavi-tunnel/main/Pahlavi.py"
+PY="/opt/emad/Pahlavi.py"
+PY_URL="https://raw.githubusercontent.com/emad1381/emad/main/Pahlavi.py"
 
-INSTALL_PATH="/usr/local/bin/pahlavi-tunnel"
+INSTALL_PATH="/usr/local/bin/emad"
 
-BASE="/etc/pahlavi_manager"
+BASE="/etc/emad_manager"
 CONF="$BASE/profiles"
 MAX=10
 
-HC_SCRIPT="/usr/local/bin/pahlavi-health-check"
-HC_CRON_TAG="# PahlaviTunnelHealthCheck"
+HC_SCRIPT="/usr/local/bin/emad-health-check"
+HC_CRON_TAG="# emadHealthCheck"
 
 # Colors
 if [[ -t 1 ]]; then
@@ -37,6 +37,43 @@ fi
 need_root(){ [[ "$(id -u)" == "0" ]] || { echo "Run as root (sudo -i)"; exit 1; }; }
 pause(){ read -r -p "Press Enter to continue..." _ < /dev/tty || true; }
 have(){ command -v "$1" >/dev/null 2>&1; }
+
+print_section(){
+  local title="$1"
+  echo -e "${CLR_DIM}------------------------------------------------------------${CLR_RESET}" > /dev/tty
+  echo -e "${CLR_CYAN}${CLR_BOLD}${title}${CLR_RESET}" > /dev/tty
+  echo -e "${CLR_DIM}------------------------------------------------------------${CLR_RESET}" > /dev/tty
+}
+
+read_port(){
+  local prompt="$1" default="${2:-}" value
+  while true; do
+    if [[ -n "$default" ]]; then
+      read -r -p "${prompt} [${default}]: " value < /dev/tty
+      value="${value:-$default}"
+    else
+      read -r -p "${prompt}: " value < /dev/tty
+    fi
+    if [[ "$value" =~ ^[0-9]+$ ]] && (( value >= 1 && value <= 65535 )); then
+      echo "$value"
+      return 0
+    fi
+    echo "[!] Invalid port. Enter a number between 1 and 65535." > /dev/tty
+  done
+}
+
+read_yes_no(){
+  local prompt="$1" default="${2:-y}" value
+  while true; do
+    read -r -p "${prompt} (y/n) [${default}]: " value < /dev/tty
+    value="${value:-$default}"
+    case "${value,,}" in
+      y|yes) echo "y"; return 0 ;;
+      n|no) echo "n"; return 0 ;;
+      *) echo "[!] Please enter y or n." > /dev/tty ;;
+    esac
+  done
+}
 
 apt_try_install(){
   export DEBIAN_FRONTEND=noninteractive
@@ -85,7 +122,7 @@ install_script(){
     fetch_url_to "$SELF_URL" "$INSTALL_PATH"
   fi
   chmod +x "$INSTALL_PATH"
-  echo "[+] Installed. Run: sudo pahlavi-tunnel" > /dev/tty
+  echo "[+] Installed. Run: sudo emad" > /dev/tty
 }
 
 update_script(){
@@ -103,7 +140,7 @@ update_script(){
   if is_installed; then
     mv -f "$tmp" "$INSTALL_PATH"
     chmod +x "$INSTALL_PATH"
-    echo "[+] Updated. Run again: sudo pahlavi-tunnel" > /dev/tty
+    echo "[+] Updated. Run again: sudo emad" > /dev/tty
   else
     mv -f "$tmp" "./${SCRIPT_FILENAME}"
     chmod +x "./${SCRIPT_FILENAME}"
@@ -142,9 +179,9 @@ optimize_server(){
     sysctl -w net.ipv4.tcp_congestion_control=bbr >/dev/null 2>&1 || true
 
     # Persist settings (idempotent, separate file)
-    local conf="/etc/sysctl.d/99-pahlavi-tunnel.conf"
+    local conf="/etc/sysctl.d/99-emad.conf"
     cat > "$conf" <<'EOF'
-# Pahlavi Tunnel - network tuning
+# emad tunnel - network tuning
 net.core.default_qdisc=fq
 net.ipv4.tcp_congestion_control=bbr
 
@@ -175,7 +212,7 @@ uninstall_script(){
 }
 
 # Info (best-effort)
-get_public_ip(){ curl -fsSL --max-time 3 https://api.ipify.org 2>/dev/null || true; }
+get_public_ip(){ [[ "${EMAD_FAST_BANNER:-1}" == "1" ]] && { echo ""; return 0; }; curl -fsSL --max-time 2 https://api.ipify.org 2>/dev/null || true; }
 get_ipinfo_field(){
   local field="$1" ip="$2"
   [[ -n "$ip" ]] || { echo ""; return 0; }
@@ -229,12 +266,12 @@ pick_slot(){
 }
 edit_profile(){
   local prof="$1" f="$CONF/${prof}.env" role="${prof%%[0-9]*}"
-  echo "" > /dev/tty; echo "Editing: $prof" > /dev/tty
+  print_section "Editing profile: $prof"
 
   if [[ "$role" == "eu" ]]; then
     read -r -p "Iran IP: " IRAN_IP < /dev/tty
-    read -r -p "Bridge port (e.g. 7000): " BRIDGE < /dev/tty
-    read -r -p "Sync port   (e.g. 7001): " SYNC < /dev/tty
+    BRIDGE="$(read_port 'Bridge port' '7000')"
+    SYNC="$(read_port 'Sync port' '7001')"
     cat >"$f" <<EOF
 ROLE=eu
 IRAN_IP=$IRAN_IP
@@ -242,10 +279,10 @@ BRIDGE=$BRIDGE
 SYNC=$SYNC
 EOF
   else
-    read -r -p "Bridge port (e.g. 7000): " BRIDGE < /dev/tty
-    read -r -p "Sync port   (e.g. 7001): " SYNC < /dev/tty
-    read -r -p "Auto-Sync ports from EU? (y/n): " AS < /dev/tty
-    if [[ "${AS,,}" == "y" ]]; then
+    BRIDGE="$(read_port 'Bridge port' '7000')"
+    SYNC="$(read_port 'Sync port' '7001')"
+    AS="$(read_yes_no 'Auto-Sync ports from EU?' 'y')"
+    if [[ "$AS" == "y" ]]; then
       cat >"$f" <<EOF
 ROLE=iran
 BRIDGE=$BRIDGE
@@ -267,7 +304,7 @@ EOF
   echo "[+] Saved $f" > /dev/tty
 }
 
-session_name(){ echo "pahlavi_$1"; }
+session_name(){ echo "emad_$1"; }
 is_running(){
   local prof="$1" s; s="$(session_name "$prof")"
   screen -ls 2>/dev/null | grep -q "\.${s}[[:space:]]"
@@ -314,7 +351,7 @@ set -euo pipefail
 PY="${PY}"
 CONF="${CONF}"
 MAX="${MAX}"
-session_name(){ echo "pahlavi_\$1"; }
+session_name(){ echo "emad_\$1"; }
 is_running(){ local prof="\$1" s; s="\$(session_name "\$prof")"; screen -ls 2>/dev/null | grep -q "\\.\${s}[[:space:]]"; }
 start_from_profile(){
   local prof="\$1" f="\${CONF}/\${prof}.env"
@@ -427,10 +464,10 @@ while true; do
   clear || true
   print_banner
 
-  echo -e "${CLR_WHITE}${CLR_BOLD}1.${CLR_RESET} Create/Update profile"
-  echo -e "${CLR_WHITE}${CLR_BOLD}2.${CLR_RESET} Manage tunnel (select slot)"
-  echo -e "${CLR_WHITE}${CLR_BOLD}3.${CLR_RESET} Enable cron health-check"
-  echo -e "${CLR_WHITE}${CLR_BOLD}4.${CLR_RESET} Disable cron health-check"
+  echo -e "${CLR_WHITE}${CLR_BOLD}1.${CLR_RESET} Create or update profile"
+  echo -e "${CLR_WHITE}${CLR_BOLD}2.${CLR_RESET} Manage tunnel and slots"
+  echo -e "${CLR_WHITE}${CLR_BOLD}3.${CLR_RESET} Enable auto health-check (cron)"
+  echo -e "${CLR_WHITE}${CLR_BOLD}4.${CLR_RESET} Disable auto health-check (cron)"
   echo -e "${CLR_WHITE}${CLR_BOLD}5.${CLR_RESET} Install script (system-wide)"
   echo -e "${CLR_WHITE}${CLR_BOLD}6.${CLR_RESET} Update script (self-update)"
   echo -e "${CLR_WHITE}${CLR_BOLD}7.${CLR_RESET} Uninstall script"

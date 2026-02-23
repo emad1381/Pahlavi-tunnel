@@ -1,6 +1,6 @@
 🇮🇷 فارسی | 🌍 [English Version](README.md)
 
-# 🚀 Pahlavi Tunnel
+# 🚀 emad
 
 مدیریت‌کننده حرفه‌ای Reverse TCP Tunnel  
 چند اسلات • AutoSync • بررسی سلامت • بهینه‌سازی BBR • چند روش Port Forward
@@ -15,7 +15,7 @@
 
 # 📌 معرفی پروژه
 
-Pahlavi Tunnel یک سیستم تونل TCP معکوس است که برای اتصال دو سرور طراحی شده است:
+emad یک سیستم تونل TCP معکوس است که برای اتصال دو سرور طراحی شده است:
 
 - 🇮🇷 سرور ایران (IR)
 - 🌍 سرور خارج (EU)
@@ -66,13 +66,13 @@ Pahlavi Tunnel یک سیستم تونل TCP معکوس است که برای ات
 # 🟢 مرحله اول — نصب روی سرور ایران
 
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/Zehnovik/Pahlavi-tunnel/main/install.sh)
+bash <(curl -Ls https://raw.githubusercontent.com/emad1381/emad/main/install.sh)
 ```
 
 برای اجرای منوی مدیریت تانل دستور زیر را وارد کنید:
 
 ```bash
-sudo pahlavi-tunnel
+sudo emad
 ```
 
 
@@ -165,7 +165,7 @@ Enter
 مراحل مشابه را روی سرور EU انجام دهید:
 
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/Zehnovik/Pahlavi-tunnel/main/install.sh)
+bash <(curl -Ls https://raw.githubusercontent.com/emad1381/emad/main/install.sh)
 ```
 
 ---
