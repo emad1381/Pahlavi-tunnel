@@ -9,7 +9,7 @@ from typing import Optional
 
 # --------- Tunables ----------
 DIAL_TIMEOUT = 5
-KEEPALIVE_SECS = 15  # Aggressive keepalive for active GFW/Filtering
+KEEPALIVE_SECS = 30  # Safer, standard keepalive wait
 SOCKBUF = 4 * 1024 * 1024  # 4MB to guarantee high Bandwidth-Delay Product on LFNs
 BUF_COPY = 262144          # 256KB to minimize Python GIL syscall overhead
 POOL_WAIT = 5
@@ -75,13 +75,19 @@ def auto_pool_size(role: str = "ir") -> int:
     return pool
 
 def is_socket_alive(s: socket.socket) -> bool:
-    """Fast, non-destructive check if socket is still connected using select."""
+    """Check if socket is alive by peeking."""
     try:
-        import select
-        r, _, _ = select.select([s], [], [], 0.0)
-        if r:
-            # If readable before we've sent/received anything, it means EOF or garbage data
-            return False
+        s.setblocking(False)
+        try:
+            data = s.recv(1, socket.MSG_PEEK)
+            if data == b"":
+                return False
+        except BlockingIOError:
+            return True
+        except Exception:
+            return True
+        finally:
+            s.setblocking(True)
         return True
     except Exception:
         return False
@@ -104,12 +110,6 @@ def tune_tcp(sock: socket.socket):
     except Exception:
         pass
 
-    # Aggressive dead-socket detection for silent firewall drops (TCP_USER_TIMEOUT)
-    try:
-        sock.setsockopt(socket.IPPROTO_TCP, 18, 15000) # 15 seconds
-    except Exception:
-        pass
-
     # keepalive
     try:
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
@@ -117,7 +117,7 @@ def tune_tcp(sock: socket.socket):
         if hasattr(socket, "TCP_KEEPIDLE"):
             sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, KEEPALIVE_SECS)
         if hasattr(socket, "TCP_KEEPINTVL"):
-            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, max(1, KEEPALIVE_SECS // 3))
+            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, KEEPALIVE_SECS // 2)
         if hasattr(socket, "TCP_KEEPCNT"):
             sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 3)
     except Exception:

@@ -3,7 +3,7 @@ set -euo pipefail
 
 APP_NAME="emad"
 TG_ID="@emad1381"
-VERSION="2.2.0-Stable"
+VERSION="2.3.0-Stable"
 
 GITHUB_REPO="github.com/emad1381/Pahlavi-tunnel"
 
