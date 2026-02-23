@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO="https://raw.githubusercontent.com/Zehnovik/Pahlavi-tunnel/main"
+REPO="https://raw.githubusercontent.com/emad1381/Pahlavi-tunnel/main"
 MANAGER_URL="$REPO/Pahlavi-Tunnel.sh"
 PY_URL="$REPO/Pahlavi.py"
 
-BIN="/usr/local/bin/pahlavi-tunnel"
-PY_DST="/opt/pahlavi/Pahlavi.py"
+BIN="/usr/local/bin/emad"
+PY_DST="/opt/emad/Pahlavi.py"
 
 MODE="${1:-minimal}"   # minimal | full
 
@@ -44,16 +44,16 @@ cleanup() { rm -rf "$tmp_dir"; }
 trap cleanup EXIT
 
 info "Downloading manager..."
-curl -fsSL "$MANAGER_URL" -o "$tmp_dir/pahlavi-tunnel" || err "Failed to download manager"
+curl -fsSL "$MANAGER_URL" -o "$tmp_dir/emad" || err "Failed to download manager"
 
 info "Downloading tunnel core..."
 curl -fsSL "$PY_URL" -o "$tmp_dir/Pahlavi.py" || err "Failed to download tunnel core (Pahlavi.py)"
 
 # sanity check: non-empty files
-[[ -s "$tmp_dir/pahlavi-tunnel" ]] || err "Downloaded manager is empty"
+[[ -s "$tmp_dir/emad" ]] || err "Downloaded manager is empty"
 [[ -s "$tmp_dir/Pahlavi.py" ]] || err "Downloaded core is empty"
 
-install -m 0755 "$tmp_dir/pahlavi-tunnel" "$BIN"
+install -m 0755 "$tmp_dir/emad" "$BIN"
 mkdir -p "$(dirname "$PY_DST")"
 install -m 0755 "$tmp_dir/Pahlavi.py" "$PY_DST"
 
@@ -64,7 +64,7 @@ echo "Manager installed at: $BIN"
 echo "Tunnel core installed at: $PY_DST"
 echo ""
 echo "Run it with:"
-echo "sudo pahlavi-tunnel"
+echo "sudo emad"
 echo ""
 echo "Tip:"
 echo " - Minimal install: sudo bash install.sh"
