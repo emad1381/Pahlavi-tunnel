@@ -1,27 +1,27 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-APP_NAME="Pahlavi"
-TG_ID="@IlyaahD"
+APP_NAME="emad"
+TG_ID="@emad1381"
 VERSION="2.0.0"
 
-GITHUB_REPO="github.com/Zehnovik/Pahlavi-tunnel"
+GITHUB_REPO="github.com/emad1381/emad"
 
 # MUST match GitHub file name exactly:
 SCRIPT_FILENAME="Pahlavi-Tunnel.sh"
-SELF_URL="https://raw.githubusercontent.com/Zehnovik/Pahlavi-tunnel/main/${SCRIPT_FILENAME}"
+SELF_URL="https://raw.githubusercontent.com/emad1381/emad/main/${SCRIPT_FILENAME}"
 
-PY="/opt/pahlavi/Pahlavi.py"
-PY_URL="https://raw.githubusercontent.com/Zehnovik/Pahlavi-tunnel/main/Pahlavi.py"
+PY="/opt/emad/Pahlavi.py"
+PY_URL="https://raw.githubusercontent.com/emad1381/emad/main/Pahlavi.py"
 
-INSTALL_PATH="/usr/local/bin/pahlavi-tunnel"
+INSTALL_PATH="/usr/local/bin/emad"
 
-BASE="/etc/pahlavi_manager"
+BASE="/etc/emad_manager"
 CONF="$BASE/profiles"
 MAX=10
 
-HC_SCRIPT="/usr/local/bin/pahlavi-health-check"
-HC_CRON_TAG="# PahlaviTunnelHealthCheck"
+HC_SCRIPT="/usr/local/bin/emad-health-check"
+HC_CRON_TAG="# emadHealthCheck"
 
 # Colors
 if [[ -t 1 ]]; then
@@ -122,7 +122,7 @@ install_script(){
     fetch_url_to "$SELF_URL" "$INSTALL_PATH"
   fi
   chmod +x "$INSTALL_PATH"
-  echo "[+] Installed. Run: sudo pahlavi-tunnel" > /dev/tty
+  echo "[+] Installed. Run: sudo emad" > /dev/tty
 }
 
 update_script(){
@@ -140,7 +140,7 @@ update_script(){
   if is_installed; then
     mv -f "$tmp" "$INSTALL_PATH"
     chmod +x "$INSTALL_PATH"
-    echo "[+] Updated. Run again: sudo pahlavi-tunnel" > /dev/tty
+    echo "[+] Updated. Run again: sudo emad" > /dev/tty
   else
     mv -f "$tmp" "./${SCRIPT_FILENAME}"
     chmod +x "./${SCRIPT_FILENAME}"
@@ -179,9 +179,9 @@ optimize_server(){
     sysctl -w net.ipv4.tcp_congestion_control=bbr >/dev/null 2>&1 || true
 
     # Persist settings (idempotent, separate file)
-    local conf="/etc/sysctl.d/99-pahlavi-tunnel.conf"
+    local conf="/etc/sysctl.d/99-emad.conf"
     cat > "$conf" <<'EOF'
-# Pahlavi Tunnel - network tuning
+# emad tunnel - network tuning
 net.core.default_qdisc=fq
 net.ipv4.tcp_congestion_control=bbr
 
@@ -212,7 +212,7 @@ uninstall_script(){
 }
 
 # Info (best-effort)
-get_public_ip(){ curl -fsSL --max-time 3 https://api.ipify.org 2>/dev/null || true; }
+get_public_ip(){ [[ "${EMAD_FAST_BANNER:-1}" == "1" ]] && { echo ""; return 0; }; curl -fsSL --max-time 2 https://api.ipify.org 2>/dev/null || true; }
 get_ipinfo_field(){
   local field="$1" ip="$2"
   [[ -n "$ip" ]] || { echo ""; return 0; }
@@ -304,7 +304,7 @@ EOF
   echo "[+] Saved $f" > /dev/tty
 }
 
-session_name(){ echo "pahlavi_$1"; }
+session_name(){ echo "emad_$1"; }
 is_running(){
   local prof="$1" s; s="$(session_name "$prof")"
   screen -ls 2>/dev/null | grep -q "\.${s}[[:space:]]"
@@ -351,7 +351,7 @@ set -euo pipefail
 PY="${PY}"
 CONF="${CONF}"
 MAX="${MAX}"
-session_name(){ echo "pahlavi_\$1"; }
+session_name(){ echo "emad_\$1"; }
 is_running(){ local prof="\$1" s; s="\$(session_name "\$prof")"; screen -ls 2>/dev/null | grep -q "\\.\${s}[[:space:]]"; }
 start_from_profile(){
   local prof="\$1" f="\${CONF}/\${prof}.env"

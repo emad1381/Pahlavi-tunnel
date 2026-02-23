@@ -1,6 +1,6 @@
 🌍 English | 🇮🇷 [نسخه فارسی](README_FA.md)
 
-# 🚀 Pahlavi Tunnel
+# 🚀 emad
 
 A lightweight, high-performance **reverse TCP tunnel manager** for connecting an **IRAN server** to a **foreign server** with stable long-running links, slot-based profiles, and simple operations.
 
@@ -8,7 +8,7 @@ A lightweight, high-performance **reverse TCP tunnel manager** for connecting an
 
 ## Table of Contents
 
-1. [What is Pahlavi Tunnel?](#what-is-pahlavi-tunnel)
+1. [What is emad?](#what-is-emad)
 2. [How it Works](#how-it-works)
 3. [Core Features](#core-features)
 4. [Architecture & Data Flow](#architecture--data-flow)
@@ -27,9 +27,9 @@ A lightweight, high-performance **reverse TCP tunnel manager** for connecting an
 
 ---
 
-## What is Pahlavi Tunnel?
+## What is emad?
 
-**Pahlavi Tunnel** is a reverse TCP tunneling system designed to connect:
+**emad** is a reverse TCP tunneling system designed to connect:
 
 - 🇮🇷 **IRAN Server** (inside/entry side)
 - 🌍 **EU/Foreign Server** (outside/service side)
@@ -108,13 +108,13 @@ Foreign Server --(Sync TCP frames)--> IRAN Server
 Install on **both servers**:
 
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/Zehnovik/Pahlavi-tunnel/main/install.sh)
+bash <(curl -Ls https://raw.githubusercontent.com/emad1381/emad/main/install.sh)
 ```
 
 Then open manager:
 
 ```bash
-sudo pahlavi-tunnel
+sudo emad
 ```
 
 ---
@@ -123,7 +123,7 @@ sudo pahlavi-tunnel
 
 ## 1) Prepare IRAN server
 
-1. Run `sudo pahlavi-tunnel`
+1. Run `sudo emad`
 2. Choose `1) Create or update profile`
 3. Select role `IRAN`
 4. Select slot (e.g. `iran1`)
@@ -134,7 +134,7 @@ sudo pahlavi-tunnel
 
 ## 2) Prepare Foreign server
 
-1. Run `sudo pahlavi-tunnel`
+1. Run `sudo emad`
 2. Choose `1) Create or update profile`
 3. Select role `EU`
 4. Select matching slot number (e.g. `eu1`)
@@ -188,7 +188,7 @@ On each side:
 Profiles are stored under:
 
 ```bash
-/etc/pahlavi_manager/profiles/
+/etc/emad_manager/profiles/
 ```
 
 Example files:
@@ -339,4 +339,4 @@ Yes. Disable AutoSync and provide CSV ports on IRAN profile.
 
 ---
 
-❤️ Maintained by Pahlavi Tunnel
+❤️ Maintained by emad
