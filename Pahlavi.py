@@ -10,7 +10,8 @@ from typing import Optional
 # --------- Tunables ----------
 DIAL_TIMEOUT = 5
 KEEPALIVE_SECS = 20
-BUF_COPY = 65536  # 64KB Industry standard chunk size
+SOCKBUF = 4 * 1024 * 1024  # 4MB to guarantee high Bandwidth-Delay Product on LFNs
+BUF_COPY = 262144          # 256KB to minimize Python GIL syscall overhead
 POOL_WAIT = 5
 SYNC_INTERVAL = 3
 
@@ -95,7 +96,14 @@ def tune_tcp(sock: socket.socket):
             sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_QUICKACK, 1)
         except Exception:
             pass
-    # buffer tuning is left to the OS for BBR efficiency
+
+    # Ensure buffers are large enough for long-fat-networks (LFN)
+    try:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, SOCKBUF)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, SOCKBUF)
+    except Exception:
+        pass
+
     # keepalive
     try:
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
