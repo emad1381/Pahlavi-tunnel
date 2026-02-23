@@ -140,11 +140,15 @@ update_script(){
   if is_installed; then
     mv -f "$tmp" "$INSTALL_PATH"
     chmod +x "$INSTALL_PATH"
-    echo "[+] Updated. Run again: sudo emad" > /dev/tty
+    echo "[+] Updated successfully." > /dev/tty
+    echo "[i] Reloading updated manager now..." > /dev/tty
+    exec "$INSTALL_PATH"
   else
     mv -f "$tmp" "./${SCRIPT_FILENAME}"
     chmod +x "./${SCRIPT_FILENAME}"
     echo "[+] Updated file saved locally: ./${SCRIPT_FILENAME}" > /dev/tty
+    echo "[i] Reloading updated local script now..." > /dev/tty
+    exec "./${SCRIPT_FILENAME}"
   fi
 }
 
@@ -435,9 +439,14 @@ test_tunnel(){
       echo "[!] No paired EU profile found for slot $slot." > /dev/tty
       echo "[!] Tip: run Test Tunnel using an EU profile for end-to-end remote check." > /dev/tty
       echo "[i] Local sanity checks:" > /dev/tty
-      ss -lntp 2>/dev/null | awk '{print $4}' | grep -E ":(${bridge}|${sync})$" >/dev/null 2>&1 \
-        && echo "[!] Bridge/Sync port already in use on this host (${bridge}/${sync})." > /dev/tty \
-        || echo "[+] Bridge/Sync ports seem free on this host (${bridge}/${sync})." > /dev/tty
+      if ss -lntp 2>/dev/null | awk '{print $4}' | grep -E ":(${bridge}|${sync})$" >/dev/null 2>&1; then
+        echo "[+] Bridge/Sync ports are in use on this host (${bridge}/${sync}) - likely listener is active." > /dev/tty
+        echo "[i] Listener details:" > /dev/tty
+        ss -lntp 2>/dev/null | grep -E ":(${bridge}|${sync})\b" > /dev/tty || true
+      else
+        echo "[~] Bridge/Sync ports seem free on this host (${bridge}/${sync})." > /dev/tty
+        echo "[i] If this is the IRAN side, start tunnel first so EU can connect." > /dev/tty
+      fi
       return 0
     fi
   fi
@@ -506,6 +515,10 @@ for label, port in ports:
     else:
         overall_ok = False
         print(f"[-] {label} port {port}: unreachable ({ok_count}/{attempts}) | last error: {last_err}")
+        if "timed out" in last_err.lower():
+            print(f"[i] Hint for {label}:{port} -> likely firewall/security-group/routing drop.")
+        elif "refused" in last_err.lower():
+            print(f"[i] Hint for {label}:{port} -> host reachable but no listener on that port.")
 
 ratio = (score / max_score) * 100 if max_score else 0
 print(f"[i] Tunnel readiness score: {score}/{max_score} ({ratio:.0f}%)")
@@ -520,6 +533,7 @@ else:
     print("[-] SMART RESULT: Not ready. Tunnel creation will likely fail.")
 
 if not overall_ok:
+    print("[i] Next checks: open ports on IRAN firewall/provider panel, verify DNAT/security-group, then re-test.")
     raise SystemExit(1)
 PY
 }
