@@ -5,14 +5,14 @@ APP_NAME="emad"
 TG_ID="@emad1381"
 VERSION="2.0.0"
 
-GITHUB_REPO="github.com/emad1381/emad"
+GITHUB_REPO="github.com/emad1381/Pahlavi-tunnel"
 
 # MUST match GitHub file name exactly:
 SCRIPT_FILENAME="Pahlavi-Tunnel.sh"
-SELF_URL="https://raw.githubusercontent.com/emad1381/emad/main/${SCRIPT_FILENAME}"
+SELF_URL="https://raw.githubusercontent.com/emad1381/Pahlavi-tunnel/main/${SCRIPT_FILENAME}"
 
 PY="/opt/emad/Pahlavi.py"
-PY_URL="https://raw.githubusercontent.com/emad1381/emad/main/Pahlavi.py"
+PY_URL="https://raw.githubusercontent.com/emad1381/Pahlavi-tunnel/main/Pahlavi.py"
 
 INSTALL_PATH="/usr/local/bin/emad"
 

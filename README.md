@@ -108,7 +108,7 @@ Foreign Server --(Sync TCP frames)--> IRAN Server
 Install on **both servers**:
 
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/emad1381/emad/main/install.sh)
+bash <(curl -Ls https://raw.githubusercontent.com/emad1381/Pahlavi-tunnel/main/install.sh)
 ```
 
 Then open manager:
