@@ -408,7 +408,7 @@ enable_cron_healthcheck(){
 }
 
 test_tunnel(){
-  local role prof f bridge sync iran_ip attempts timeout_s
+  local role prof f bridge sync iran_ip attempts timeout_s expect_sync sync_optional_note
   print_section "Test Tunnel (Smart Pre-check)"
   role="$(pick_role)"
   prof="$(pick_slot "$role")"
@@ -422,6 +422,8 @@ test_tunnel(){
   sync="${SYNC:-7001}"
   attempts=3
   timeout_s=2.5
+  expect_sync=1
+  sync_optional_note=""
 
   if [[ "${ROLE:-}" != "eu" ]]; then
     echo "[i] Selected profile is IRAN. Looking for paired EU slot..." > /dev/tty
@@ -435,6 +437,10 @@ test_tunnel(){
       echo "[i] Using paired EU profile: $eu_prof" > /dev/tty
       bridge="${BRIDGE:-$bridge}"
       sync="${SYNC:-$sync}"
+      if [[ "${AUTO_SYNC:-true}" != "true" ]]; then
+        expect_sync=0
+        sync_optional_note="AUTO_SYNC is disabled on IRAN profile; sync port can be closed by design."
+      fi
     else
       echo "[!] No paired EU profile found for slot $slot." > /dev/tty
       echo "[!] Tip: run Test Tunnel using an EU profile for end-to-end remote check." > /dev/tty
@@ -451,6 +457,24 @@ test_tunnel(){
     fi
   fi
 
+
+  if [[ "${ROLE:-}" == "eu" ]]; then
+    local slot iran_prof iran_file
+    slot="${prof//[!0-9]/}"
+    iran_prof="iran${slot}"
+    iran_file="$CONF/${iran_prof}.env"
+    if [[ -f "$iran_file" ]]; then
+      # shellcheck disable=SC1090
+      source "$iran_file"
+      if [[ "${AUTO_SYNC:-true}" != "true" ]]; then
+        expect_sync=0
+        sync_optional_note="AUTO_SYNC is disabled on paired IRAN profile ${iran_prof}; sync port can be closed by design."
+      fi
+      # keep EU connection target/ip from original selected profile
+      # shellcheck disable=SC1090
+      source "$f"
+    fi
+  fi
   iran_ip="${IRAN_IP:-}"
   if [[ -z "$iran_ip" ]]; then
     echo "[!] Missing IRAN_IP in selected/paired EU profile." > /dev/tty
@@ -460,12 +484,16 @@ test_tunnel(){
   echo "[i] Target IRAN IP: $iran_ip" > /dev/tty
   echo "[i] Testing bridge=${bridge} sync=${sync} attempts=${attempts}" > /dev/tty
 
-  IRAN_IP="$iran_ip" BRIDGE_PORT="$bridge" SYNC_PORT="$sync" ATTEMPTS="$attempts" TIMEOUT_S="$timeout_s" \
+  IRAN_IP="$iran_ip" BRIDGE_PORT="$bridge" SYNC_PORT="$sync" ATTEMPTS="$attempts" TIMEOUT_S="$timeout_s" EXPECT_SYNC="$expect_sync" SYNC_OPTIONAL_NOTE="$sync_optional_note" \
   python3 - <<'PY' > /dev/tty
 import os, socket, time
 
 host = os.environ["IRAN_IP"]
-ports = [("Bridge", int(os.environ["BRIDGE_PORT"])), ("Sync", int(os.environ["SYNC_PORT"]))]
+expect_sync = os.environ.get("EXPECT_SYNC", "1") == "1"
+sync_note = os.environ.get("SYNC_OPTIONAL_NOTE", "")
+ports = [("Bridge", int(os.environ["BRIDGE_PORT"]))]
+if expect_sync:
+    ports.append(("Sync", int(os.environ["SYNC_PORT"])))
 attempts = int(os.environ.get("ATTEMPTS", "3"))
 timeout_s = float(os.environ.get("TIMEOUT_S", "2.5"))
 
@@ -487,6 +515,8 @@ try:
     infos = socket.getaddrinfo(host, None)
     ips = sorted({i[4][0] for i in infos})
     print(f"[+] DNS/resolve OK: {host} -> {', '.join(ips[:4])}")
+    if not expect_sync and sync_note:
+        print(f"[i] Sync check skipped: {sync_note}")
 except Exception as e:
     print(f"[-] DNS/resolve failed for {host}: {e}")
     raise SystemExit(2)
@@ -533,7 +563,7 @@ else:
     print("[-] SMART RESULT: Not ready. Tunnel creation will likely fail.")
 
 if not overall_ok:
-    print("[i] Next checks: open ports on IRAN firewall/provider panel, verify DNAT/security-group, then re-test.")
+    print("[i] Next checks: open required ports on IRAN firewall/provider panel, verify routing/security-group, then re-test.")
     raise SystemExit(1)
 PY
 }

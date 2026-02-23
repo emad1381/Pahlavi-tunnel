@@ -146,7 +146,7 @@ def bridge(a: socket.socket, b: socket.socket):
         while sel.get_map():
             events = sel.select(timeout=30)
             if not events:
-                break
+                continue
             for key, mask in events:
                 src = key.fileobj
                 dst = peer[src]

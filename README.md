@@ -252,11 +252,13 @@ Use menu option `9) Test Tunnel (smart pre-check)` before creating/starting tunn
 What it checks:
 
 - DNS resolution for target IRAN endpoint
-- TCP reachability for both Bridge and Sync ports
+- TCP reachability for Bridge (and Sync when AutoSync is enabled)
 - Multi-attempt probe with average RTT
 - Readiness score and actionable final verdict
 
 If you run it on an IRAN profile, the tool tries to find paired `euN` profile automatically for end-to-end checks.
+
+When `AUTO_SYNC=false`, Sync-port probing is skipped by design, because IRAN does not need Sync listener in manual-port mode.
 
 ## Port Forwarding Methods
 
