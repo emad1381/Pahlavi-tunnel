@@ -38,6 +38,43 @@ need_root(){ [[ "$(id -u)" == "0" ]] || { echo "Run as root (sudo -i)"; exit 1; 
 pause(){ read -r -p "Press Enter to continue..." _ < /dev/tty || true; }
 have(){ command -v "$1" >/dev/null 2>&1; }
 
+print_section(){
+  local title="$1"
+  echo -e "${CLR_DIM}------------------------------------------------------------${CLR_RESET}" > /dev/tty
+  echo -e "${CLR_CYAN}${CLR_BOLD}${title}${CLR_RESET}" > /dev/tty
+  echo -e "${CLR_DIM}------------------------------------------------------------${CLR_RESET}" > /dev/tty
+}
+
+read_port(){
+  local prompt="$1" default="${2:-}" value
+  while true; do
+    if [[ -n "$default" ]]; then
+      read -r -p "${prompt} [${default}]: " value < /dev/tty
+      value="${value:-$default}"
+    else
+      read -r -p "${prompt}: " value < /dev/tty
+    fi
+    if [[ "$value" =~ ^[0-9]+$ ]] && (( value >= 1 && value <= 65535 )); then
+      echo "$value"
+      return 0
+    fi
+    echo "[!] Invalid port. Enter a number between 1 and 65535." > /dev/tty
+  done
+}
+
+read_yes_no(){
+  local prompt="$1" default="${2:-y}" value
+  while true; do
+    read -r -p "${prompt} (y/n) [${default}]: " value < /dev/tty
+    value="${value:-$default}"
+    case "${value,,}" in
+      y|yes) echo "y"; return 0 ;;
+      n|no) echo "n"; return 0 ;;
+      *) echo "[!] Please enter y or n." > /dev/tty ;;
+    esac
+  done
+}
+
 apt_try_install(){
   export DEBIAN_FRONTEND=noninteractive
   apt-get update -y >/dev/null 2>&1 || true
@@ -229,12 +266,12 @@ pick_slot(){
 }
 edit_profile(){
   local prof="$1" f="$CONF/${prof}.env" role="${prof%%[0-9]*}"
-  echo "" > /dev/tty; echo "Editing: $prof" > /dev/tty
+  print_section "Editing profile: $prof"
 
   if [[ "$role" == "eu" ]]; then
     read -r -p "Iran IP: " IRAN_IP < /dev/tty
-    read -r -p "Bridge port (e.g. 7000): " BRIDGE < /dev/tty
-    read -r -p "Sync port   (e.g. 7001): " SYNC < /dev/tty
+    BRIDGE="$(read_port 'Bridge port' '7000')"
+    SYNC="$(read_port 'Sync port' '7001')"
     cat >"$f" <<EOF
 ROLE=eu
 IRAN_IP=$IRAN_IP
@@ -242,10 +279,10 @@ BRIDGE=$BRIDGE
 SYNC=$SYNC
 EOF
   else
-    read -r -p "Bridge port (e.g. 7000): " BRIDGE < /dev/tty
-    read -r -p "Sync port   (e.g. 7001): " SYNC < /dev/tty
-    read -r -p "Auto-Sync ports from EU? (y/n): " AS < /dev/tty
-    if [[ "${AS,,}" == "y" ]]; then
+    BRIDGE="$(read_port 'Bridge port' '7000')"
+    SYNC="$(read_port 'Sync port' '7001')"
+    AS="$(read_yes_no 'Auto-Sync ports from EU?' 'y')"
+    if [[ "$AS" == "y" ]]; then
       cat >"$f" <<EOF
 ROLE=iran
 BRIDGE=$BRIDGE
@@ -427,10 +464,10 @@ while true; do
   clear || true
   print_banner
 
-  echo -e "${CLR_WHITE}${CLR_BOLD}1.${CLR_RESET} Create/Update profile"
-  echo -e "${CLR_WHITE}${CLR_BOLD}2.${CLR_RESET} Manage tunnel (select slot)"
-  echo -e "${CLR_WHITE}${CLR_BOLD}3.${CLR_RESET} Enable cron health-check"
-  echo -e "${CLR_WHITE}${CLR_BOLD}4.${CLR_RESET} Disable cron health-check"
+  echo -e "${CLR_WHITE}${CLR_BOLD}1.${CLR_RESET} Create or update profile"
+  echo -e "${CLR_WHITE}${CLR_BOLD}2.${CLR_RESET} Manage tunnel and slots"
+  echo -e "${CLR_WHITE}${CLR_BOLD}3.${CLR_RESET} Enable auto health-check (cron)"
+  echo -e "${CLR_WHITE}${CLR_BOLD}4.${CLR_RESET} Disable auto health-check (cron)"
   echo -e "${CLR_WHITE}${CLR_BOLD}5.${CLR_RESET} Install script (system-wide)"
   echo -e "${CLR_WHITE}${CLR_BOLD}6.${CLR_RESET} Update script (self-update)"
   echo -e "${CLR_WHITE}${CLR_BOLD}7.${CLR_RESET} Uninstall script"
