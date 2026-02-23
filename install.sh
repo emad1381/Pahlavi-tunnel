@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO="https://raw.githubusercontent.com/emad1381/emad/main"
+REPO="https://raw.githubusercontent.com/emad1381/Pahlavi-tunnel/main"
 MANAGER_URL="$REPO/Pahlavi-Tunnel.sh"
 PY_URL="$REPO/Pahlavi.py"
 
