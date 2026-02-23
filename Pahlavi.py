@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import os, sys, time, socket, struct, threading, subprocess, re, resource
+import os, sys, time, socket, struct, threading, subprocess, re, resource, selectors
 from queue import Queue, Empty
 from typing import Optional
 
