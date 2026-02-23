@@ -3,7 +3,7 @@ set -euo pipefail
 
 APP_NAME="emad"
 TG_ID="@emad1381"
-VERSION="2.1.0-Optimized"
+VERSION="2.2.0-Stable"
 
 GITHUB_REPO="github.com/emad1381/Pahlavi-tunnel"
 
@@ -486,7 +486,7 @@ test_tunnel(){
 
   IRAN_IP="$iran_ip" BRIDGE_PORT="$bridge" SYNC_PORT="$sync" ATTEMPTS="$attempts" TIMEOUT_S="$timeout_s" EXPECT_SYNC="$expect_sync" SYNC_OPTIONAL_NOTE="$sync_optional_note" \
   python3 - <<'PY' > /dev/tty
-import os, socket, time
+import os, socket, time, select
 
 host = os.environ["IRAN_IP"]
 expect_sync = os.environ.get("EXPECT_SYNC", "1") == "1"
@@ -504,6 +504,14 @@ def probe(h, p):
     try:
         s.connect((h, p))
         dt = (time.perf_counter() - t0) * 1000
+        # Deep inspection check: wait up to 0.4s to see if firewall drops it immediately (RST)
+        r, _, _ = select.select([s], [], [], 0.4)
+        if r:
+            try:
+                if s.recv(1) == b"":
+                    return False, dt, "GFW RST / Connection dropped instantly"
+            except Exception:
+                pass
         return True, dt, "ok"
     except Exception as e:
         return False, None, str(e)

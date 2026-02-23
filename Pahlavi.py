@@ -9,7 +9,7 @@ from typing import Optional
 
 # --------- Tunables ----------
 DIAL_TIMEOUT = 5
-KEEPALIVE_SECS = 20
+KEEPALIVE_SECS = 15  # Aggressive keepalive for active GFW/Filtering
 SOCKBUF = 4 * 1024 * 1024  # 4MB to guarantee high Bandwidth-Delay Product on LFNs
 BUF_COPY = 262144          # 256KB to minimize Python GIL syscall overhead
 POOL_WAIT = 5
@@ -97,10 +97,16 @@ def tune_tcp(sock: socket.socket):
         except Exception:
             pass
 
-    # Ensure buffers are large enough for long-fat-networks (LFN)
+    # buffer tuning is left to the OS for BBR efficiency
     try:
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, SOCKBUF)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, SOCKBUF)
+    except Exception:
+        pass
+
+    # Aggressive dead-socket detection for silent firewall drops (TCP_USER_TIMEOUT)
+    try:
+        sock.setsockopt(socket.IPPROTO_TCP, 18, 15000) # 15 seconds
     except Exception:
         pass
 
@@ -111,7 +117,7 @@ def tune_tcp(sock: socket.socket):
         if hasattr(socket, "TCP_KEEPIDLE"):
             sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, KEEPALIVE_SECS)
         if hasattr(socket, "TCP_KEEPINTVL"):
-            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, KEEPALIVE_SECS)
+            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, max(1, KEEPALIVE_SECS // 3))
         if hasattr(socket, "TCP_KEEPCNT"):
             sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 3)
     except Exception:
