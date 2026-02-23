@@ -1,336 +1,360 @@
 🌍 English | 🇮🇷 [نسخه فارسی](README_FA.md)
 
-# 🚀 Pahlavi Tunnel
+# 🚀 emad
 
-High-Performance Reverse TCP Tunnel Manager  
-Multi-Slot • AutoSync • Health Check • BBR Optimization • Multi Port-Forward
-
----
-
-<p align="center">
-  <b>Lightweight • Stable • Production Ready</b>
-</p>
+A lightweight, high-performance **reverse TCP tunnel manager** for connecting an **IRAN server** to a **foreign server** with stable long-running links, slot-based profiles, and simple operations.
 
 ---
 
-# 📌 Overview
+## Table of Contents
 
-Pahlavi Tunnel is a reverse TCP tunneling system designed to connect two servers:
-
-- 🇮🇷 IR (Iran Server)
-- 🌍 EU (Outside Server)
-
-It supports multi-slot configuration, automatic port synchronization, system optimization, and multiple port-forwarding methods.
-
----
-
-# 🧠 Architecture
-
-```
-Client → IR Server ⇄ EU Server
-             │
-        Bridge Port (Main Tunnel)
-             │
-         Sync Port (AutoSync)
-```
-
-### 🔹 Bridge Port
-Main persistent TCP tunnel connection between IR and EU.
-
-### 🔹 Sync Port
-Used for automatic port synchronization between servers.
+1. [What is emad?](#what-is-emad)
+2. [How it Works](#how-it-works)
+3. [Core Features](#core-features)
+4. [Architecture & Data Flow](#architecture--data-flow)
+5. [Project Structure](#project-structure)
+6. [Installation](#installation)
+7. [Quick Start (Step-by-Step)](#quick-start-step-by-step)
+8. [Manager Menu Guide](#manager-menu-guide)
+9. [Configuration Profiles](#configuration-profiles)
+10. [Performance & Optimization](#performance--optimization)
+11. [Health Check & Auto Restart](#health-check--auto-restart)
+12. [Port Forwarding Methods](#port-forwarding-methods)
+13. [Security Recommendations](#security-recommendations)
+14. [Troubleshooting](#troubleshooting)
+15. [What Changed Recently](#what-changed-recently)
+16. [FAQ](#faq)
 
 ---
 
-# 🛠 Features
+## What is emad?
+
+**emad** is a reverse TCP tunneling system designed to connect:
+
+- 🇮🇷 **IRAN Server** (inside/entry side)
+- 🌍 **EU/Foreign Server** (outside/service side)
+
+It keeps persistent reverse links between servers, supports automatic port sync, and provides a simple shell manager for creating/running tunnel profiles.
+
+---
+
+## How it Works
+
+The system uses two TCP channels:
+
+| Channel | Purpose | Default |
+|---|---|---|
+| Bridge Port | Main reverse tunnel traffic | `7000` |
+| Sync Port | AutoSync metadata (port announcements) | `7001` |
+
+At runtime:
+
+1. The foreign server opens reverse bridge connections to IRAN.
+2. IRAN keeps those sockets in a pool.
+3. When a client hits an open IRAN port, IRAN assigns one bridge socket and signals target port.
+4. Foreign side connects locally to the target service and forwards traffic both ways.
+
+---
+
+## Core Features
 
 | Feature | Description |
-|----------|------------|
-| Reverse TCP Tunnel | Persistent IR ⇄ EU connection |
-| Multi-Slot (1–10) | Store up to 10 independent tunnel configs |
-| AutoSync | Automatic port creation & synchronization |
-| Cron Health Check | Automatic restart if tunnel stops |
-| BBR Optimization | Network performance tuning |
-| Multi Port Forward | iptables, nftables, HAProxy, socat |
-| systemd Integration | Auto-start on reboot |
-| Performance Tuning | ENV-based tuning |
-| Thread Control | Worker pool limitation |
-| Metrics (Optional) | Connection & traffic stats |
+|---|---|
+| Reverse TCP Tunnel | Persistent IRAN ⇄ Foreign connectivity |
+| Multi-Slot Profiles | Up to 10 saved slots per role |
+| AutoSync | Automatically syncs listening service ports |
+| Manual Port Mode | Fixed CSV ports when AutoSync is disabled |
+| Health Check (Cron) | Periodic monitor + auto restart |
+| systemd-friendly workflow | Works well with server boot/start flows |
+| Network optimization helpers | BBR/sysctl tuning menu option |
+| Improved runtime logging | Better operational visibility |
 
 ---
 
-# 📦 Installation Guide
+## Architecture & Data Flow
+
+```text
+Client -> IRAN Server <==== Reverse Bridge TCP ====>> Foreign Server
+               |                                          |
+               +-- open IRAN listener ports               +-- local services (127.0.0.1:PORT)
+
+AutoSync:
+Foreign Server --(Sync TCP frames)--> IRAN Server
+```
+
+### Role Summary
+
+| Role | Main Responsibility |
+|---|---|
+| IRAN | Accept bridge sockets, expose public listening ports, map traffic |
+| Foreign | Keep reverse workers alive, connect local services, send AutoSync updates |
 
 ---
 
-# 🟢 Step 1 — Setup IR Server
+## Project Structure
+
+| File | Purpose |
+|---|---|
+| `Pahlavi.py` | Core tunnel engine (IR/EU runtime, bridge, sync, pool) |
+| `Pahlavi-Tunnel.sh` | Interactive manager (profiles, start/stop, health-check, optimize) |
+| `install.sh` | Remote bootstrap installer |
+| `README.md` | English documentation |
+| `README_FA.md` | Persian documentation |
+
+---
+
+## Installation
+
+Install on **both servers**:
 
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/Zehnovik/Pahlavi-tunnel/main/install.sh)
+bash <(curl -Ls https://raw.githubusercontent.com/emad1381/Pahlavi-tunnel/main/install.sh)
 ```
 
-After completing all installation and configuration steps, run the following command to open the Tunnel Manager:
+Then open manager:
 
 ```bash
-sudo pahlavi-tunnel
-
-
-### 1️⃣ Install Dependencies
-
-Select:
-
-```
-5) Install / Complete Setup
+sudo emad
 ```
 
 ---
 
-### 2️⃣ Create Tunnel
+## Quick Start (Step-by-Step)
 
-```
-1) Create Tunnel
-2) IRAN Server
-```
+## 1) Prepare IRAN server
 
----
+1. Run `sudo emad`
+2. Choose `1) Create or update profile`
+3. Select role `IRAN`
+4. Select slot (e.g. `iran1`)
+5. Set bridge/sync ports (defaults: `7000`/`7001`)
+6. Choose AutoSync:
+   - `y` for automatic service discovery from foreign server
+   - `n` for manual CSV ports (example: `80,443,8443`)
 
-### 3️⃣ Select Slot (1–10)
+## 2) Prepare Foreign server
 
-Each slot represents a saved configuration.
+1. Run `sudo emad`
+2. Choose `1) Create or update profile`
+3. Select role `EU`
+4. Select matching slot number (e.g. `eu1`)
+5. Enter IRAN public IP
+6. Enter the **same** bridge and sync ports
 
----
+## 3) Start tunnel
 
-### 4️⃣ Enter Bridge Port
+On each side:
 
-Default:
-
-```
-7000
-```
-
-Must match on both servers.
-
----
-
-### 5️⃣ Enter Sync Port
-
-Default:
-
-```
-7001
-```
-
-Must match on both servers.
+1. `2) Manage tunnel and slots`
+2. Pick role/slot
+3. Select `2) Start`
+4. Check `5) Status`
 
 ---
 
-### 6️⃣ Enable AutoSync?
+## Manager Menu Guide
 
-```
-y  → Enable
-n  → Disable
-```
+### Main Menu
+
+| Option | Action |
+|---|---|
+| 1 | Create or update profile |
+| 2 | Manage tunnel and slots |
+| 3 | Enable auto health-check (cron) |
+| 4 | Disable auto health-check (cron) |
+| 5 | Install script system-wide |
+| 6 | Self-update manager script |
+| 7 | Uninstall manager script |
+| 8 | Optimize server (BBR + sysctl) |
+| 9 | Test Tunnel (smart pre-check) |
+| 0 | Exit |
+
+### Slot Management Menu
+
+| Option | Action |
+|---|---|
+| 1 | Show profile |
+| 2 | Start |
+| 3 | Stop |
+| 4 | Restart |
+| 5 | Status |
+| 6 | Logs (attach to screen session) |
+| 7 | Delete slot |
+| 0 | Back |
 
 ---
 
-### 7️⃣ Enter Config Port
+## Configuration Profiles
 
-Enter your desired service port.
-
-Press Enter to finish.
-
----
-
-# 🔵 Step 2 — Setup EU Server
-
-Repeat same process:
+Profiles are stored under:
 
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/Zehnovik/Pahlavi-tunnel/main/install.sh)
+/etc/emad_manager/profiles/
 ```
 
-After completing all installation and configuration steps, run the following command to open the Tunnel Manager:
+Example files:
 
-```bash
-sudo pahlavi-tunnel
+- `eu1.env`
+- `iran1.env`
 
-Select:
+### Profile Fields
 
-```
-5) Install / Complete Setup
-1) Create Tunnel
-2) EU Server
-```
-
-- Choose same Slot
-- Enter IR Server IP
-- Enter same Bridge Port
-- Enter same Sync Port
-
-Press Enter to finish.
+| Field | Used By | Meaning |
+|---|---|---|
+| `ROLE` | all | `eu` or `iran` |
+| `IRAN_IP` | EU | Public IP of IRAN server |
+| `BRIDGE` | all | Main tunnel port |
+| `SYNC` | all | AutoSync channel port |
+| `AUTO_SYNC` | IRAN | `true`/`false` |
+| `PORTS` | IRAN manual mode | CSV list of ports |
 
 ---
 
-# ▶️ Start Tunnel
+## Performance & Optimization
 
-## On IR:
+Pahlavi includes practical performance helpers:
 
-```
-2) Manage Tunnel
-→ Select IR
-→ Select Slot
-→ 2) Start
-→ 5) Status
-```
+| Area | Behavior |
+|---|---|
+| TCP tuning | Keepalive + socket buffer tuning in runtime |
+| Pool sizing | Automatic pool sizing from system limits |
+| Retry behavior | Reconnect loops with bounded backoff |
+| System tuning | Optional BBR + sysctl optimization from manager |
 
-Status must show:
+Run optimization from menu:
 
-```
-Running
-```
-
-## On EU:
-
-Repeat same steps.
-
----
-
-# 🎉 Tunnel Connected Successfully
-
----
-
-# ⚙ Optional Enhancements
-
----
-
-## 🚀 Enable BBR Optimization
-
-```
-9) Optimize Server
-```
-
-Enables:
-
-- BBR congestion control
-- fq queue discipline
-- sysctl performance tuning
-
----
-
-## 🕒 Enable Health Check (Cron)
-
-```
-3) Enable Cron
-```
-
-Choose interval in minutes.
-
-Auto-restarts tunnel if stopped.
-
----
-
-# 🔄 Port Forward Methods
-
-Available methods:
-
-1. iptables (DNAT)
-2. nftables
-3. HAProxy (Layer 4)
-4. socat relay
-
-Each method supports:
-- Add rule
-- Remove rule
-- Show rules
-
----
-
-# ⚡ Performance Tuning (Advanced)
-
-You can configure environment variables:
-
-```bash
-export USER_WORKERS=128
-export AUTO_SOCKBUF=1
-export BUF_COPY_BYTES=262144
-export METRICS_PORT=9109
+```text
+8) Optimize server (BBR + sysctl)
 ```
 
 ---
 
-# 🔐 Security Recommendations
+## Health Check & Auto Restart
 
-- Only open required ports
-- Use firewall rules carefully
-- Keep Bridge & Sync ports protected
-- Monitor active connections
-- Enable failover if using multiple EU servers
+Enable periodic health checks:
+
+```text
+3) Enable auto health-check (cron)
+```
+
+- You choose interval in minutes.
+- If a slot process is missing, script restarts it automatically.
+- Disable anytime with menu option `4`.
 
 ---
 
-# 🛠 Troubleshooting
+---
 
-Check service:
+## Tunnel Pre-check (Option 9)
+
+Use menu option `9) Test Tunnel (smart pre-check)` before creating/starting tunnels.
+
+What it checks:
+
+- DNS resolution for target IRAN endpoint
+- TCP reachability for Bridge (and Sync when AutoSync is enabled)
+- Multi-attempt probe with average RTT
+- Readiness score and actionable final verdict
+
+If you run it on an IRAN profile, the tool tries to find paired `euN` profile automatically for end-to-end checks.
+
+When `AUTO_SYNC=false`, Sync-port probing is skipped by design, because IRAN does not need Sync listener in manual-port mode.
+
+## Port Forwarding Methods
+
+The project can be used alongside these forwarding methods:
+
+| Method | Use Case |
+|---|---|
+| `iptables` (DNAT) | Simple kernel NAT forwarding |
+| `nftables` | Modern packet filtering/forwarding |
+| `HAProxy` (L4) | Managed TCP balancing/routing |
+| `socat` | Quick relay and debugging |
+
+---
+
+## Security Recommendations
+
+| Recommendation | Why |
+|---|---|
+| Open only required ports | Reduce attack surface |
+| Protect bridge/sync ports with firewall | Avoid unauthorized access |
+| Use strong SSH/admin hygiene | Protect hosts and configs |
+| Monitor logs regularly | Detect drops/restarts early |
+| Keep OS packages updated | Patch known vulnerabilities |
+
+---
+
+## Troubleshooting
+
+### Service/Process Checks
 
 ```bash
 systemctl status pahlavi
+screen -ls
 ```
 
-Check listening ports:
+### Port and Socket Checks
 
 ```bash
 ss -lntp
+nc -zv IRAN_IP 7000
+nc -zv IRAN_IP 7001
 ```
 
-Test connectivity:
+### Common Issues
 
-```bash
-nc -zv IR_IP 7000
-```
-
----
-
-# 📊 Recommended Production Setup
-
-- Enable BBR
-- Enable Cron HealthCheck
-- Use HAProxy for managed forwarding
-- Use AutoSync
-- Monitor logs regularly
+| Symptom | Likely Cause | Fix |
+|---|---|---|
+| Tunnel not connecting | Bridge port blocked | Open firewall/security group on IRAN |
+| AutoSync not working | Sync port mismatch/blocked | Ensure same `SYNC` on both sides |
+| Intermittent drops | Network/provider instability | Enable health-check + tune kernel settings |
+| No traffic to service | Service not listening on foreign server | Verify local service on `127.0.0.1:PORT` |
 
 ---
 
-# ❓ FAQ
+## What Changed Recently
 
-### Q: Bridge & Sync ports must match?
-Yes, both servers must use identical values.
+### Runtime Engine (`Pahlavi.py`)
 
-### Q: Can I run multiple tunnels?
-Yes, use different slots.
+| Change | Benefit |
+|---|---|
+| Improved bridge forwarding path | Better performance under concurrency |
+| Enhanced TCP behavior and retry handling | More resilient tunnel workers |
+| Better operational logs | Easier debugging and monitoring |
 
-### Q: What if tunnel stops?
-Enable Cron HealthCheck.
+### Manager UI (`Pahlavi-Tunnel.sh`)
 
-### Q: Does it survive reboot?
-Yes (systemd integration).
-
----
-
-# 📁 Project Structure
-
-```
-IlyaAhmadi-Tunnel.sh  → Manager Script
-ilyaahmadi.py         → Core Tunnel Engine
-```
+| Change | Benefit |
+|---|---|
+| Better menu wording | Easier navigation |
+| Input validation for ports/yes-no | Fewer configuration mistakes |
+| Cleaner sectioned prompts | Improved UX for setup/edit flow |
 
 ---
 
-# 📌 Final Notes
+## FAQ
 
-Any configuration change must be applied identically on both servers.
+### Do bridge/sync ports have to be identical on both servers?
+Yes. Bridge and sync values must match for each slot pair.
 
-Restart tunnel after changes.
+### Can I run multiple independent tunnels?
+Yes. Use different slot numbers (`1..10`).
+
+### Will it survive reboots?
+Yes, with proper manager setup and optional cron health-check.
+
+### Can I use manual ports instead of AutoSync?
+Yes. Disable AutoSync and provide CSV ports on IRAN profile.
 
 ---
 
-# ❤️ Maintained by Pahlavi Tunnel
+## Final Notes
+
+- Keep both sides synchronized when changing profile values.
+- Start and verify both paired slots (`euN` + `iranN`).
+- Use health-check and optimization options for production stability.
+
+---
+
+❤️ Maintained by emad
