@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
-import os, sys, time, socket, struct, threading, subprocess, re, resource, selectors
+import os, sys, time, socket, struct, threading, subprocess, re, selectors
+try:
+    import resource
+except ImportError:
+    resource = None
 from queue import Queue, Empty
 from typing import Optional
 
 # --------- Tunables ----------
 DIAL_TIMEOUT = 5
 KEEPALIVE_SECS = 20
-SOCKBUF = 8 * 1024 * 1024
-BUF_COPY = 256 * 1024
+BUF_COPY = 65536  # 64KB Industry standard chunk size
 POOL_WAIT = 5
 SYNC_INTERVAL = 3
 
@@ -30,8 +33,11 @@ def auto_pool_size(role: str = "ir") -> int:
 
     # File descriptor limit for this process
     try:
-        soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
-        nofile = soft if soft and soft > 0 else 1024
+        if resource:
+            soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+            nofile = soft if soft and soft > 0 else 1024
+        else:
+            nofile = 1024
     except Exception:
         nofile = 1024
 
@@ -68,20 +74,13 @@ def auto_pool_size(role: str = "ir") -> int:
     return pool
 
 def is_socket_alive(s: socket.socket) -> bool:
-    """Best-effort check to avoid using dead sockets from the pool."""
+    """Fast, non-destructive check if socket is still connected using select."""
     try:
-        s.setblocking(False)
-        try:
-            data = s.recv(1, socket.MSG_PEEK)
-            if data == b"":
-                return False
-        except BlockingIOError:
-            return True
-        except Exception:
-            # If we can't peek, assume it's OK; actual send will validate
-            return True
-        finally:
-            s.setblocking(True)
+        import select
+        r, _, _ = select.select([s], [], [], 0.0)
+        if r:
+            # If readable before we've sent/received anything, it means EOF or garbage data
+            return False
         return True
     except Exception:
         return False
@@ -96,11 +95,7 @@ def tune_tcp(sock: socket.socket):
             sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_QUICKACK, 1)
         except Exception:
             pass
-    try:
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, SOCKBUF)
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, SOCKBUF)
-    except Exception:
-        pass
+    # buffer tuning is left to the OS for BBR efficiency
     # keepalive
     try:
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
@@ -145,11 +140,11 @@ def pipe(src: socket.socket, dst: socket.socket):
         pass
     finally:
         try:
-            src.shutdown(socket.SHUT_RD)
+            src.shutdown(socket.SHUT_RDWR)
         except Exception:
             pass
         try:
-            dst.shutdown(socket.SHUT_WR)
+            dst.shutdown(socket.SHUT_RDWR)
         except Exception:
             pass
 
@@ -210,6 +205,7 @@ def eu_mode(iran_ip, bridge_port, sync_port, pool_size):
     def reverse_link_worker():
         delay = 0.2
         while True:
+            conn = None
             try:
                 conn = dial_tcp(iran_ip, bridge_port)
                 # wait for 2-byte target port
@@ -221,6 +217,9 @@ def eu_mode(iran_ip, bridge_port, sync_port, pool_size):
                 bridge(conn, local)
                 delay = 0.2
             except Exception:
+                if conn:
+                    try: conn.close()
+                    except Exception: pass
                 jitter = (threading.get_ident() % 10) * 0.05
                 time.sleep(delay + jitter)
                 delay = min(delay * 2, 5.0)
@@ -394,6 +393,14 @@ def read_line(prompt=None):
     return s.strip()
 
 def main():
+    # Attempt to maximize File Descriptors (important for huge pools)
+    try:
+        if resource:
+            soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+            resource.setrlimit(resource.RLIMIT_NOFILE, (hard, hard))
+    except Exception:
+        pass
+
     # expected input order (from your shell wrapper):
     # EU: 1, IRAN_IP, BRIDGE, SYNC
     # IR: 2, BRIDGE, SYNC, y|n, [PORTS if n]
@@ -408,7 +415,7 @@ def main():
         sync = int(read_line() or "7001")
         pool = auto_pool_size("eu")
         try:
-            nofile = resource.getrlimit(resource.RLIMIT_NOFILE)[0]
+            nofile = resource.getrlimit(resource.RLIMIT_NOFILE)[0] if resource else -1
         except Exception:
             nofile = -1
         log("AUTO", f"role=EU nofile={nofile} pool={pool} (override: PAHLAVI_POOL)")
