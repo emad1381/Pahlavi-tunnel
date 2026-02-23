@@ -133,86 +133,36 @@ def recv_exact(sock: socket.socket, n: int) -> Optional[bytes]:
         data.extend(chunk)
     return bytes(data)
 
-def bridge(a: socket.socket, b: socket.socket):
-    sel = selectors.DefaultSelector()
-    peer = {a: b, b: a}
-    outq = {a: bytearray(), b: bytearray()}
-
-    for s in (a, b):
-        s.setblocking(False)
-        sel.register(s, selectors.EVENT_READ)
-
+def pipe(src: socket.socket, dst: socket.socket):
+    buf = bytearray(BUF_COPY)
     try:
-        while sel.get_map():
-            events = sel.select(timeout=30)
-            if not events:
-                continue
-            for key, mask in events:
-                src = key.fileobj
-                dst = peer[src]
-
-                if mask & selectors.EVENT_READ:
-                    try:
-                        data = src.recv(BUF_COPY)
-                    except BlockingIOError:
-                        data = None
-                    except Exception:
-                        data = b""
-
-                    if data == b"":
-                        for s in (src, dst):
-                            try:
-                                sel.unregister(s)
-                            except Exception:
-                                pass
-                        break
-
-                    if data:
-                        outq[dst].extend(data)
-                        try:
-                            sel.modify(dst, selectors.EVENT_READ | selectors.EVENT_WRITE)
-                        except Exception:
-                            pass
-
-                if mask & selectors.EVENT_WRITE:
-                    buf = outq[src]
-                    if not buf:
-                        try:
-                            sel.modify(src, selectors.EVENT_READ)
-                        except Exception:
-                            pass
-                        continue
-                    try:
-                        sent = src.send(buf)
-                    except BlockingIOError:
-                        sent = 0
-                    except Exception:
-                        sent = -1
-                    if sent < 0:
-                        for s in (src, dst):
-                            try:
-                                sel.unregister(s)
-                            except Exception:
-                                pass
-                        break
-                    if sent > 0:
-                        del buf[:sent]
-                        if not buf:
-                            try:
-                                sel.modify(src, selectors.EVENT_READ)
-                            except Exception:
-                                pass
+        while True:
+            n = src.recv_into(buf)
+            if n <= 0:
+                break
+            dst.sendall(memoryview(buf)[:n])
     except Exception:
         pass
     finally:
         try:
-            sel.close()
+            src.shutdown(socket.SHUT_RD)
         except Exception:
             pass
-        try: a.close()
-        except Exception: pass
-        try: b.close()
-        except Exception: pass
+        try:
+            dst.shutdown(socket.SHUT_WR)
+        except Exception:
+            pass
+
+
+def bridge(a: socket.socket, b: socket.socket):
+    t1 = threading.Thread(target=pipe, args=(a, b), daemon=True)
+    t2 = threading.Thread(target=pipe, args=(b, a), daemon=True)
+    t1.start(); t2.start()
+    t1.join(); t2.join()
+    try: a.close()
+    except Exception: pass
+    try: b.close()
+    except Exception: pass
 
 # --------- EU: detect listening TCP ports (like ss) ----------
 _port_re = re.compile(r":(\d+)$")
