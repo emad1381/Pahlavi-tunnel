@@ -166,6 +166,7 @@ On each side:
 | 6 | Self-update manager script |
 | 7 | Uninstall manager script |
 | 8 | Optimize server (BBR + sysctl) |
+| 9 | Test Tunnel (smart pre-check) |
 | 0 | Exit |
 
 ### Slot Management Menu
@@ -241,6 +242,21 @@ Enable periodic health checks:
 - Disable anytime with menu option `4`.
 
 ---
+
+---
+
+## Tunnel Pre-check (Option 9)
+
+Use menu option `9) Test Tunnel (smart pre-check)` before creating/starting tunnels.
+
+What it checks:
+
+- DNS resolution for target IRAN endpoint
+- TCP reachability for both Bridge and Sync ports
+- Multi-attempt probe with average RTT
+- Readiness score and actionable final verdict
+
+If you run it on an IRAN profile, the tool tries to find paired `euN` profile automatically for end-to-end checks.
 
 ## Port Forwarding Methods
 

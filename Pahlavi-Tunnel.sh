@@ -403,6 +403,127 @@ enable_cron_healthcheck(){
   echo "[+] Cron enabled (every $interval minute(s))." > /dev/tty
 }
 
+test_tunnel(){
+  local role prof f bridge sync iran_ip attempts timeout_s
+  print_section "Test Tunnel (Smart Pre-check)"
+  role="$(pick_role)"
+  prof="$(pick_slot "$role")"
+  f="$CONF/${prof}.env"
+  [[ -f "$f" ]] || { echo "Profile not found: $prof" > /dev/tty; return 1; }
+
+  # shellcheck disable=SC1090
+  source "$f"
+
+  bridge="${BRIDGE:-7000}"
+  sync="${SYNC:-7001}"
+  attempts=3
+  timeout_s=2.5
+
+  if [[ "${ROLE:-}" != "eu" ]]; then
+    echo "[i] Selected profile is IRAN. Looking for paired EU slot..." > /dev/tty
+    local slot eu_prof eu_file
+    slot="${prof//[!0-9]/}"
+    eu_prof="eu${slot}"
+    eu_file="$CONF/${eu_prof}.env"
+    if [[ -f "$eu_file" ]]; then
+      # shellcheck disable=SC1090
+      source "$eu_file"
+      echo "[i] Using paired EU profile: $eu_prof" > /dev/tty
+      bridge="${BRIDGE:-$bridge}"
+      sync="${SYNC:-$sync}"
+    else
+      echo "[!] No paired EU profile found for slot $slot." > /dev/tty
+      echo "[!] Tip: run Test Tunnel using an EU profile for end-to-end remote check." > /dev/tty
+      echo "[i] Local sanity checks:" > /dev/tty
+      ss -lntp 2>/dev/null | awk '{print $4}' | grep -E ":(${bridge}|${sync})$" >/dev/null 2>&1 \
+        && echo "[!] Bridge/Sync port already in use on this host (${bridge}/${sync})." > /dev/tty \
+        || echo "[+] Bridge/Sync ports seem free on this host (${bridge}/${sync})." > /dev/tty
+      return 0
+    fi
+  fi
+
+  iran_ip="${IRAN_IP:-}"
+  if [[ -z "$iran_ip" ]]; then
+    echo "[!] Missing IRAN_IP in selected/paired EU profile." > /dev/tty
+    return 1
+  fi
+
+  echo "[i] Target IRAN IP: $iran_ip" > /dev/tty
+  echo "[i] Testing bridge=${bridge} sync=${sync} attempts=${attempts}" > /dev/tty
+
+  IRAN_IP="$iran_ip" BRIDGE_PORT="$bridge" SYNC_PORT="$sync" ATTEMPTS="$attempts" TIMEOUT_S="$timeout_s" \
+  python3 - <<'PY' > /dev/tty
+import os, socket, time
+
+host = os.environ["IRAN_IP"]
+ports = [("Bridge", int(os.environ["BRIDGE_PORT"])), ("Sync", int(os.environ["SYNC_PORT"]))]
+attempts = int(os.environ.get("ATTEMPTS", "3"))
+timeout_s = float(os.environ.get("TIMEOUT_S", "2.5"))
+
+def probe(h, p):
+    t0 = time.perf_counter()
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.settimeout(timeout_s)
+    try:
+        s.connect((h, p))
+        dt = (time.perf_counter() - t0) * 1000
+        return True, dt, "ok"
+    except Exception as e:
+        return False, None, str(e)
+    finally:
+        try: s.close()
+        except Exception: pass
+
+try:
+    infos = socket.getaddrinfo(host, None)
+    ips = sorted({i[4][0] for i in infos})
+    print(f"[+] DNS/resolve OK: {host} -> {', '.join(ips[:4])}")
+except Exception as e:
+    print(f"[-] DNS/resolve failed for {host}: {e}")
+    raise SystemExit(2)
+
+overall_ok = True
+score = 0
+max_score = len(ports) * attempts
+
+for label, port in ports:
+    ok_count = 0
+    rtts = []
+    last_err = ""
+    for _ in range(attempts):
+        ok, rtt, err = probe(host, port)
+        if ok:
+            ok_count += 1
+            rtts.append(rtt)
+            score += 1
+        else:
+            last_err = err
+        time.sleep(0.15)
+
+    if ok_count:
+        avg = sum(rtts) / len(rtts)
+        print(f"[+] {label} port {port}: reachable ({ok_count}/{attempts}), avg RTT={avg:.1f} ms")
+    else:
+        overall_ok = False
+        print(f"[-] {label} port {port}: unreachable ({ok_count}/{attempts}) | last error: {last_err}")
+
+ratio = (score / max_score) * 100 if max_score else 0
+print(f"[i] Tunnel readiness score: {score}/{max_score} ({ratio:.0f}%)")
+
+if ratio >= 100:
+    print("[+] SMART RESULT: Excellent. Tunnel creation should work.")
+elif ratio >= 70:
+    print("[~] SMART RESULT: Likely workable but unstable risk exists.")
+elif ratio > 0:
+    print("[~] SMART RESULT: Partial connectivity. Fix firewall/routing before creating tunnel.")
+else:
+    print("[-] SMART RESULT: Not ready. Tunnel creation will likely fail.")
+
+if not overall_ok:
+    raise SystemExit(1)
+PY
+}
+
 print_banner(){
   local loc dc inst
   loc="$(get_location_string)"
@@ -472,6 +593,7 @@ while true; do
   echo -e "${CLR_WHITE}${CLR_BOLD}6.${CLR_RESET} Update script (self-update)"
   echo -e "${CLR_WHITE}${CLR_BOLD}7.${CLR_RESET} Uninstall script"
   echo -e "${CLR_WHITE}${CLR_BOLD}8.${CLR_RESET} Optimize server (BBR + sysctl)"
+  echo -e "${CLR_WHITE}${CLR_BOLD}9.${CLR_RESET} Test Tunnel (smart pre-check)"
   echo -e "${CLR_WHITE}${CLR_BOLD}0.${CLR_RESET} Exit"
   echo -e "${CLR_DIM}------------------------------------------------------------${CLR_RESET}"
 
@@ -485,6 +607,7 @@ while true; do
     6) update_script; pause ;;
     7) uninstall_script; pause ;;
     8) optimize_server; pause ;;
+    9) test_tunnel; pause ;;
     0) exit 0 ;;
     *) echo "Invalid."; sleep 1 ;;
   esac
