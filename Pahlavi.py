@@ -11,6 +11,10 @@ BUF_COPY = 256 * 1024
 POOL_WAIT = 5
 SYNC_INTERVAL = 3
 
+def log(prefix: str, msg: str):
+    ts = time.strftime("%Y-%m-%d %H:%M:%S")
+    print(f"[{ts}] [{prefix}] {msg}", flush=True)
+
 # --------- Auto pool sizing ----------
 def auto_pool_size(role: str = "ir") -> int:
     """Pick a safe default pool size based on process FD limit + RAM.
@@ -87,6 +91,11 @@ def tune_tcp(sock: socket.socket):
         sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
     except Exception:
         pass
+    if hasattr(socket, "TCP_QUICKACK"):
+        try:
+            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_QUICKACK, 1)
+        except Exception:
+            pass
     try:
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, SOCKBUF)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, SOCKBUF)
@@ -124,25 +133,30 @@ def recv_exact(sock: socket.socket, n: int) -> Optional[bytes]:
         data.extend(chunk)
     return bytes(data)
 
-def pipe(a: socket.socket, b: socket.socket):
+def pipe(src: socket.socket, dst: socket.socket):
     buf = bytearray(BUF_COPY)
     try:
         while True:
-            n = a.recv_into(buf)
+            n = src.recv_into(buf)
             if n <= 0:
                 break
-            b.sendall(memoryview(buf)[:n])
+            dst.sendall(memoryview(buf)[:n])
     except Exception:
         pass
     finally:
-        try: a.shutdown(socket.SHUT_RD)
-        except Exception: pass
-        try: b.shutdown(socket.SHUT_WR)
-        except Exception: pass
+        try:
+            src.shutdown(socket.SHUT_RD)
+        except Exception:
+            pass
+        try:
+            dst.shutdown(socket.SHUT_WR)
+        except Exception:
+            pass
+
 
 def bridge(a: socket.socket, b: socket.socket):
-    t1 = threading.Thread(target=pipe, args=(a,b), daemon=True)
-    t2 = threading.Thread(target=pipe, args=(b,a), daemon=True)
+    t1 = threading.Thread(target=pipe, args=(a, b), daemon=True)
+    t2 = threading.Thread(target=pipe, args=(b, a), daemon=True)
     t1.start(); t2.start()
     t1.join(); t2.join()
     try: a.close()
@@ -207,14 +221,15 @@ def eu_mode(iran_ip, bridge_port, sync_port, pool_size):
                 bridge(conn, local)
                 delay = 0.2
             except Exception:
-                time.sleep(delay)
+                jitter = (threading.get_ident() % 10) * 0.05
+                time.sleep(delay + jitter)
                 delay = min(delay * 2, 5.0)
 
     threading.Thread(target=port_sync_loop, daemon=True).start()
     for _ in range(pool_size):
         threading.Thread(target=reverse_link_worker, daemon=True).start()
 
-    print(f"[EU] Running | IRAN={iran_ip} bridge={bridge_port} sync={sync_port} pool={pool_size}")
+    log("EU", f"Running | IRAN={iran_ip} bridge={bridge_port} sync={sync_port} pool={pool_size}")
     while True:
         time.sleep(3600)
 
@@ -229,12 +244,12 @@ def ir_mode(bridge_port, sync_port, pool_size, auto_sync, manual_ports_csv):
         srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         srv.bind(("0.0.0.0", bridge_port))
         srv.listen(16384)
-        print(f"[IR] Bridge listening on {bridge_port}")
+        log("IR", f"Bridge listening on {bridge_port}")
         while True:
             try:
                 c, _ = srv.accept()
             except OSError as e:
-                print(f"[IR] accept_bridge error: {e}")
+                log("IR", f"accept_bridge error: {e}")
                 time.sleep(0.2)
                 continue
             tune_tcp(c)
@@ -259,6 +274,7 @@ def ir_mode(bridge_port, sync_port, pool_size, auto_sync, manual_ports_csv):
             try: cand.close()
             except Exception: pass
         if europe is None:
+            log("IR", f"pool_empty target={target_port}")
             try: user_sock.close()
             except Exception: pass
             return
@@ -267,6 +283,7 @@ def ir_mode(bridge_port, sync_port, pool_size, auto_sync, manual_ports_csv):
             europe.sendall(struct.pack("!H", target_port))
             europe.settimeout(None)
         except Exception:
+            log("IR", f"signal_target_failed target={target_port}")
             try: user_sock.close()
             except Exception: pass
             try: europe.close()
@@ -288,23 +305,23 @@ def ir_mode(bridge_port, sync_port, pool_size, auto_sync, manual_ports_csv):
         except Exception as e:
             with active_lock:
                 active.pop(p, None)
-            print(f"[IR] Cannot open port {p}: {e}")
+            log("IR", f"Cannot open port {p}: {e}")
             return
 
-        print(f"[IR] Port Active: {p}")
+        log("IR", f"Port Active: {p}")
 
         def accept_users():
             while True:
                 try:
                     u, _ = srv.accept()
                 except OSError as e:
-                    print(f"[IR] accept_users({p}) error: {e}")
+                    log("IR", f"accept_users({p}) error: {e}")
                     time.sleep(0.2)
                     continue
                 try:
                     threading.Thread(target=handle_user, args=(u,p), daemon=True).start()
                 except Exception as e:
-                    print(f"[IR] spawn thread error: {e}")
+                    log("IR", f"spawn thread error: {e}")
                     try: u.close()
                     except Exception: pass
         threading.Thread(target=accept_users, daemon=True).start()
@@ -314,12 +331,12 @@ def ir_mode(bridge_port, sync_port, pool_size, auto_sync, manual_ports_csv):
         srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         srv.bind(("0.0.0.0", sync_port))
         srv.listen(1024)
-        print(f"[IR] Sync listening on {sync_port} (AutoSync)")
+        log("IR", f"Sync listening on {sync_port} (AutoSync)")
         while True:
             try:
                 c, _ = srv.accept()
             except OSError as e:
-                print(f"[IR] accept_bridge error: {e}")
+                log("IR", f"accept_sync error: {e}")
                 time.sleep(0.2)
                 continue
             def handle_sync(conn):
@@ -361,9 +378,9 @@ def ir_mode(bridge_port, sync_port, pool_size, auto_sync, manual_ports_csv):
                     pass
         for p in ports:
             open_port(p)
-        print("[IR] Manual ports opened.")
+        log("IR", "Manual ports opened.")
 
-    print(f"[IR] Running | bridge={bridge_port} sync={sync_port} pool={pool_size} autoSync={auto_sync}")
+    log("IR", f"Running | bridge={bridge_port} sync={sync_port} pool={pool_size} autoSync={auto_sync}")
     while True:
         time.sleep(3600)
 
@@ -382,7 +399,7 @@ def main():
     # IR: 2, BRIDGE, SYNC, y|n, [PORTS if n]
     choice = read_line()
     if choice not in ("1","2"):
-        print("Invalid mode selection.")
+        log("CORE", "Invalid mode selection.")
         sys.exit(1)
 
     if choice == "1":
@@ -394,7 +411,7 @@ def main():
             nofile = resource.getrlimit(resource.RLIMIT_NOFILE)[0]
         except Exception:
             nofile = -1
-        print(f"[AUTO] role=EU nofile={nofile} pool={pool} (override: PAHLAVI_POOL)")
+        log("AUTO", f"role=EU nofile={nofile} pool={pool} (override: PAHLAVI_POOL)")
         eu_mode(iran_ip, bridge, sync, pool_size=pool)
     else:
         bridge = int(read_line() or "7000")
@@ -406,7 +423,7 @@ def main():
                 nofile = resource.getrlimit(resource.RLIMIT_NOFILE)[0]
             except Exception:
                 nofile = -1
-            print(f"[AUTO] role=IR nofile={nofile} pool={pool} (override: PAHLAVI_POOL)")
+            log("AUTO", f"role=IR nofile={nofile} pool={pool} (override: PAHLAVI_POOL)")
             ir_mode(bridge, sync, pool_size=pool, auto_sync=True, manual_ports_csv="")
         else:
             ports = read_line()
@@ -415,7 +432,7 @@ def main():
                 nofile = resource.getrlimit(resource.RLIMIT_NOFILE)[0]
             except Exception:
                 nofile = -1
-            print(f"[AUTO] role=IR nofile={nofile} pool={pool} (override: PAHLAVI_POOL)")
+            log("AUTO", f"role=IR nofile={nofile} pool={pool} (override: PAHLAVI_POOL)")
             ir_mode(bridge, sync, pool_size=pool, auto_sync=False, manual_ports_csv=ports)
 
 if __name__ == "__main__":
