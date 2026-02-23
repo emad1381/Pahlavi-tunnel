@@ -140,11 +140,11 @@ def pipe(src: socket.socket, dst: socket.socket):
         pass
     finally:
         try:
-            src.shutdown(socket.SHUT_RDWR)
+            src.shutdown(socket.SHUT_RD)
         except Exception:
             pass
         try:
-            dst.shutdown(socket.SHUT_RDWR)
+            dst.shutdown(socket.SHUT_WR)
         except Exception:
             pass
 
